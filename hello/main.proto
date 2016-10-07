@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package todolist;
+
+service Event {
+  rpc OnTask(Void) returns (Task) {}
+}
+
+service TodoList {
+  rpc AddTask (Task) returns (Void) {}
+}
+
+message Void {
+
+}
+
+message Task {
+  string name = 1;
+}

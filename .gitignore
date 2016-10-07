@@ -1,0 +1,13 @@
+# Qt Linux build
+build-hello-Desktop_Qt_5_7_0_GCC_64bit-Debug/
+
+# Node modules
+nodejs-client/node_modules/
+
+# gRPC generated files
+hello/main.grpc.pb.cc
+hello/main.grpc.pb.h
+hello/main.grpc.pb.o
+hello/main.pb.cc
+hello/main.pb.h
+hello/main.pb.o
