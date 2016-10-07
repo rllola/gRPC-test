@@ -20,7 +20,6 @@ using todolist::Task;
 using todolist::Event;
 using todolist::TodoList;
 
-// Class encompasing the state and logic needed to serve a request.
 class CallData {
  public:
   CallData(Event::AsyncService* service, ServerCompletionQueue* cq)
@@ -33,17 +32,19 @@ class CallData {
     if (status_ == CREATE) {
       status_ = PROCESS;
 
-
+      /*
+       * *this* must be a unique identifier
+       */
       service_->RequestOnTask(&ctx_, &request_, &responder_, cq_, cq_,this);
     } else if (status_ == PROCESS) {
 
       new CallData(service_, cq_);
 
       // The actual processing.
-      reply_.set_name("Go to the gym");
+      //reply_.set_name("Go to the gym");
 
-      status_ = FINISH;
-      responder_.Finish(reply_, Status::OK, this);
+      //status_ = FINISH;
+      //responder_.Finish(reply_, Status::OK, this);
     } else {
       GPR_ASSERT(status_ == FINISH);
       delete this;
@@ -67,25 +68,37 @@ class CallData {
 // Logic and data behind the server's behavior.
 class TodoListServiceImpl final : public TodoList::Service {
 
-  /*TodoListServiceImpl(Event::AsyncService* service, ServerCompletionQueue* cq)
-    : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) {
-
-  }*/
-
-  void callback() {
-    usleep(2000000);
-    std::cout << "Call call method onTask now !" << std::endl;
-  }
-
   Status AddTask(ServerContext* context, const Task* request,
-                  Void* reply) override {
+                    Void* reply) override {
 
     std::cout << "A Task is being add" << std::endl;
 
-    callback();
+    //Call async service here now
+    reply_.set_name("Go to the gym");
+    status_ = FINISH;
+    /*
+     * Problem *this* must be the tag that we use to register the request...
+     */
+    responder_.Finish(reply_, Status::OK, this);
 
     return Status::OK;
   }
+
+  public:
+    TodoListServiceImpl(Event::AsyncService* service, ServerCompletionQueue* cq)
+      : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) { }
+
+  private:
+    Event::AsyncService* service_;
+    ServerCompletionQueue* cq_;
+    ServerContext ctx_;
+
+    Void request_;
+    Task reply_;
+    ServerAsyncResponseWriter<Task> responder_;
+
+    enum CallStatus { CREATE, PROCESS, FINISH };
+    CallStatus status_;  // The current serving state.
 };
 
 class ServerImpl final {
@@ -102,9 +115,13 @@ class ServerImpl final {
 
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+
     builder.RegisterService(&service_);
-    builder.RegisterService(&service2_);
     cq_ = builder.AddCompletionQueue();
+
+    TodoListServiceImpl service2_(&service_,cq_.get());
+    builder.RegisterService(&service2_);
+
     server_ = builder.BuildAndStart();
     std::cout << "Server listening on " << server_address << std::endl;
 
@@ -130,7 +147,7 @@ class ServerImpl final {
 
   std::unique_ptr<ServerCompletionQueue> cq_;
   Event::AsyncService service_;
-  TodoListServiceImpl service2_;
+  //TodoListServiceImpl service2_;
   std::unique_ptr<Server> server_;
 };
 
