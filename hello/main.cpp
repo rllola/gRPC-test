@@ -35,7 +35,8 @@ class CallData {
       /*
        * *this* must be a unique identifier
        */
-      service_->RequestOnTask(&ctx_, &request_, &responder_, cq_, cq_,this);
+      std::cout << "this " << this << std::endl;
+      //service_->RequestOnTask(&ctx_, &request_, &responder_, cq_, cq_,this);
     } else if (status_ == PROCESS) {
 
       new CallData(service_, cq_);
@@ -47,6 +48,7 @@ class CallData {
       //responder_.Finish(reply_, Status::OK, this);
     } else {
       GPR_ASSERT(status_ == FINISH);
+      std::cout << "Destroy" << std::endl;
       delete this;
     }
   }
@@ -74,19 +76,23 @@ class TodoListServiceImpl final : public TodoList::Service {
     std::cout << "A Task is being add" << std::endl;
 
     //Call async service here now
+    service_->RequestOnTask(&ctx_, &request_, &responder_, cq_, cq_,(void*)1);
     reply_.set_name("Go to the gym");
-    status_ = FINISH;
-    /*
-     * Problem *this* must be the tag that we use to register the request...
-     */
-    responder_.Finish(reply_, Status::OK, this);
+    std::cout << "AddTask : " << tag << std::endl;
+    responder_.Finish(reply_, Status::OK, (void*)1);
 
     return Status::OK;
   }
 
   public:
     TodoListServiceImpl(Event::AsyncService* service, ServerCompletionQueue* cq)
-      : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) { }
+      : service_(service), cq_(cq), responder_(&ctx_) {
+    }
+
+    void setTag(void* t) {
+        std::cout << "setTag : " << t << std::endl;
+        tag = t;
+    }
 
   private:
     Event::AsyncService* service_;
@@ -97,8 +103,8 @@ class TodoListServiceImpl final : public TodoList::Service {
     Task reply_;
     ServerAsyncResponseWriter<Task> responder_;
 
-    enum CallStatus { CREATE, PROCESS, FINISH };
-    CallStatus status_;  // The current serving state.
+    // Keep tags
+    void* tag;
 };
 
 class ServerImpl final {
@@ -126,22 +132,23 @@ class ServerImpl final {
     std::cout << "Server listening on " << server_address << std::endl;
 
     // Proceed to the server's main loop.
-    HandleRpcs();
+    HandleRpcs(&service2_);
     //server_->Wait();
   }
 
  private:
 
   // This can be run in multiple threads if needed.
-  void HandleRpcs() {
+  void HandleRpcs(TodoListServiceImpl *service2_) {
     new CallData(&service_, cq_.get());
     void* tag;
     bool ok;
     while (true) {
       GPR_ASSERT(cq_->Next(&tag, &ok));
       GPR_ASSERT(ok);
-      std::cout << "lol" << std::endl;
-      static_cast<CallData*>(tag)->Proceed();
+      std::cout << "Lol" << std::endl;
+      service2_->setTag(tag);
+      //static_cast<CallData*>(tag)->Proceed();
     }
   }
 
