@@ -1,4 +1,3 @@
-#include <QCoreApplication>
 #include <memory>
 #include <iostream>
 #include <string>
@@ -30,27 +29,34 @@ class CallData {
 
   void Proceed() {
     if (status_ == CREATE) {
-      status_ = PROCESS;
-
       /*
        * *this* must be a unique identifier
        */
       std::cout << "this " << this << std::endl;
-      //service_->RequestOnTask(&ctx_, &request_, &responder_, cq_, cq_,this);
+      service_->RequestOnTask(&ctx_, &request_, &responder_, cq_, cq_,this);
+
+      status_ = PROCESS;
     } else if (status_ == PROCESS) {
 
       new CallData(service_, cq_);
 
-      // The actual processing.
-      //reply_.set_name("Go to the gym");
-
-      //status_ = FINISH;
-      //responder_.Finish(reply_, Status::OK, this);
     } else {
       GPR_ASSERT(status_ == FINISH);
       std::cout << "Destroy" << std::endl;
       delete this;
     }
+  }
+
+  void Announce(Task task) {
+    if(status_ != PROCESS){
+      return;
+    }
+
+    status_ = FINISH;
+
+    reply_.set_name("Go to the gym");
+    responder_.Finish(task, Status::OK, this);
+
   }
 
  private:
@@ -75,18 +81,20 @@ class TodoListServiceImpl final : public TodoList::Service {
 
     std::cout << "A Task is being add" << std::endl;
 
-    //Call async service here now
-    service_->RequestOnTask(&ctx_, &request_, &responder_, cq_, cq_,(void*)1);
+
     reply_.set_name("Go to the gym");
     std::cout << "AddTask : " << tag << std::endl;
-    responder_.Finish(reply_, Status::OK, (void*)1);
+
+    if(tag)
+      static_cast<CallData*>(tag)->Announce(reply_);
 
     return Status::OK;
   }
 
   public:
-    TodoListServiceImpl(Event::AsyncService* service, ServerCompletionQueue* cq)
-      : service_(service), cq_(cq), responder_(&ctx_) {
+    TodoListServiceImpl()
+      : tag(nullptr){
+
     }
 
     void setTag(void* t) {
@@ -95,13 +103,10 @@ class TodoListServiceImpl final : public TodoList::Service {
     }
 
   private:
-    Event::AsyncService* service_;
-    ServerCompletionQueue* cq_;
     ServerContext ctx_;
 
     Void request_;
     Task reply_;
-    ServerAsyncResponseWriter<Task> responder_;
 
     // Keep tags
     void* tag;
@@ -122,11 +127,11 @@ class ServerImpl final {
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
 
-    builder.RegisterService(&service_);
     cq_ = builder.AddCompletionQueue();
+    builder.RegisterService(&service_);//async service
 
-    TodoListServiceImpl service2_(&service_,cq_.get());
-    builder.RegisterService(&service2_);
+    TodoListServiceImpl service2_;
+    builder.RegisterService(&service2_);//sync service
 
     server_ = builder.BuildAndStart();
     std::cout << "Server listening on " << server_address << std::endl;
@@ -148,7 +153,7 @@ class ServerImpl final {
       GPR_ASSERT(ok);
       std::cout << "Lol" << std::endl;
       service2_->setTag(tag);
-      //static_cast<CallData*>(tag)->Proceed();
+      static_cast<CallData*>(tag)->Proceed();
     }
   }
 
@@ -160,9 +165,9 @@ class ServerImpl final {
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication a(argc, argv);
+
     ServerImpl server;
     server.Run();
 
-    return a.exec();
+    return 0;
 }
